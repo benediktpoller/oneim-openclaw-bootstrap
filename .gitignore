@@ -1,0 +1,15 @@
+# Windows
+Thumbs.db
+Desktop.ini
+
+# PowerShell
+*.ps1.user
+
+# Logs
+*.log
+
+# Node
+node_modules/
+
+# OpenClaw local state (don’t commit secrets)
+.openclaw/
