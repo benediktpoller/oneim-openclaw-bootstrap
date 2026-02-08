@@ -17,6 +17,6 @@ Write-Host "\nNodes list:" -ForegroundColor Cyan
 & openclaw nodes list --url $GatewayUrl --token $GatewayToken | Out-Host
 
 if ($NodeIdOrIp -ne '') {
-  Write-Host "\nDescribe $NodeIdOrIp:" -ForegroundColor Cyan
+  Write-Host "`nDescribe $($NodeIdOrIp):" -ForegroundColor Cyan
   & openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $NodeIdOrIp | Out-Host
 }
