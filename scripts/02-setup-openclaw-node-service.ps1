@@ -120,6 +120,13 @@ function Try-ParseJson($text) {
   return $null
 }
 
+function Get-PropValue($obj, [string]$name) {
+  if ($null -eq $obj) { return $null }
+  $p = $obj.PSObject.Properties[$name]
+  if ($p) { return $p.Value }
+  return $null
+}
+
 function Resolve-NodeId {
   param([string]$NodeIdOrIp, [string]$DisplayName)
 
@@ -176,10 +183,10 @@ function Resolve-ConnectedNodeId {
         $paired = @($dev.paired | Where-Object { $_.platform -eq 'win32' })
 
         if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and ($NodeIdOrIp -match '^\d{1,3}(\.\d{1,3}){3}$')) {
-          $paired = @($paired | Where-Object { $_.remoteIp -eq $NodeIdOrIp })
+          $paired = @($paired | Where-Object { (Get-PropValue $_ 'remoteIp') -eq $NodeIdOrIp })
         }
         if ($DisplayName -and $DisplayName.Trim() -ne '') {
-          $paired = @($paired | Where-Object { $_.displayName -eq $DisplayName })
+          $paired = @($paired | Where-Object { (Get-PropValue $_ 'displayName') -eq $DisplayName })
         }
 
         $candidateIds = @($paired |
