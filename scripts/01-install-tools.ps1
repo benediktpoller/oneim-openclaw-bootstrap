@@ -6,6 +6,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Section($t) {
+  Write-Host "\n=== $t ===" -ForegroundColor Cyan
+}
+
 function Require-Admin {
   $id = [Security.Principal.WindowsIdentity]::GetCurrent()
   $p  = New-Object Security.Principal.WindowsPrincipal($id)
@@ -95,6 +99,7 @@ function Install-WingetPackage {
   winget install --id $Id --silent --accept-package-agreements --accept-source-agreements
 }
 
+Section "Bootstrap / Package manager"
 Require-Admin
 Require-Winget
 
@@ -131,6 +136,8 @@ function Install-Tool {
   throw "No installer mapping provided for $Tool (wingetId='$WingetId', chocoId='$ChocoId')."
 }
 
+Section "Core tools"
+
 # Git
 Install-Tool -Tool 'git' -WingetId 'Git.Git' -ChocoId 'git'
 
@@ -140,7 +147,7 @@ Install-Tool -Tool 'node' -WingetId 'OpenJS.NodeJS.LTS' -ChocoId 'nodejs-lts'
 # Ensure we are on Node LTS (OpenClaw is tested primarily on LTS)
 try {
   $nodeV = (& node -v).Trim()
-  Write-Host "Node version: $nodeV" -ForegroundColor Gray
+  Write-Host ("Node: {0}" -f $nodeV) -ForegroundColor Gray
   if ($nodeV -match '^v(\d+)\.' ) {
     $major = [int]$Matches[1]
     if ($major -ge 24) {
@@ -194,6 +201,8 @@ if (-not $SkipSqlCmd) {
   }
 }
 
+Section "OpenClaw CLI"
+
 # OpenClaw CLI via npm
 # Ensure npm is on PATH. In the same shell, you might need to restart after Node install.
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
@@ -206,7 +215,11 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   } else {
     # Don't trust PATH-only checks; verify the CLI actually runs.
     # External command failures often do NOT throw; check $LASTEXITCODE.
+    $prev = $env:NODE_NO_WARNINGS
+    $env:NODE_NO_WARNINGS = '1'
     $null = (& openclaw --version)
+    $env:NODE_NO_WARNINGS = $prev
+
     if ($LASTEXITCODE -ne 0) {
       Write-Warning "openclaw command exists but is broken (exit=$LASTEXITCODE). Will reinstall."
       $needsInstall = $true
@@ -214,17 +227,18 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   }
 
   if ($needsInstall) {
-    Write-Host "\n--- (Re)Installing OpenClaw CLI (npm -g openclaw --omit=optional) ---" -ForegroundColor Cyan
+    Write-Host "(Re)installing OpenClaw via npm" -ForegroundColor Cyan
     npm rm -g openclaw 2>$null | Out-Null
     try { Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\openclaw" -ErrorAction SilentlyContinue } catch {}
     $installed = $false
 
-    Write-Host "Installing via npm (normal, without optional deps)..." -ForegroundColor Gray
+    Write-Host "- Try 1: npm i -g openclaw --omit=optional" -ForegroundColor Gray
     npm i -g openclaw --omit=optional
     if ($LASTEXITCODE -eq 0) { $installed = $true }
 
     if (-not $installed) {
-      Write-Warning "npm install failed (exit=$LASTEXITCODE). On Windows Server this is often caused by node-llama-cpp postinstall. Retrying with --ignore-scripts (skips postinstall)."
+      Write-Warning "Install failed (exit=$LASTEXITCODE). Retrying with --ignore-scripts (skips postinstall)."
+      Write-Host "- Try 2: npm i -g openclaw --ignore-scripts" -ForegroundColor Gray
       npm i -g openclaw --ignore-scripts
       if ($LASTEXITCODE -eq 0) { $installed = $true }
     }
@@ -234,17 +248,36 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     }
 
     # verify
+    $prev = $env:NODE_NO_WARNINGS
+    $env:NODE_NO_WARNINGS = '1'
     $null = (& openclaw --version)
+    $env:NODE_NO_WARNINGS = $prev
+
     if ($LASTEXITCODE -ne 0) {
-      Write-Warning "openclaw still not runnable. Showing diagnostics..."
+      Write-Warning "openclaw still not runnable. Diagnostics:"
       try { where.exe openclaw | Out-Host } catch {}
       try { npm prefix -g | Out-Host } catch {}
       try { npm root -g | Out-Host } catch {}
       throw "openclaw install completed but CLI is still not runnable (exit=$LASTEXITCODE)."
     }
+
+    Write-Host "openclaw OK" -ForegroundColor Green
   } else {
-    Write-Host "openclaw already installed (and runnable)." -ForegroundColor Green
+    Write-Host "openclaw OK" -ForegroundColor Green
   }
 }
 
-Write-Host "\nDone." -ForegroundColor Green
+Section "Summary"
+
+$summary = @(
+  [pscustomobject]@{ Name = 'git';     Version = ((git --version 2>$null) -join ' ');  Ok = [bool](Get-Command git -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'node';    Version = ((node -v 2>$null) -join ' ');        Ok = [bool](Get-Command node -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'npm';     Version = ((npm -v 2>$null) -join ' ');         Ok = [bool](Get-Command npm -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'pwsh';    Version = ((pwsh -v 2>$null) -join ' ');        Ok = [bool](Get-Command pwsh -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'sqlcmd';  Version = ((sqlcmd -? 2>$null | Select-Object -First 1) -join ''); Ok = [bool](Get-Command sqlcmd -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'openclaw';Version = ((openclaw --version 2>$null) -join ' '); Ok = [bool](Get-Command openclaw -ErrorAction SilentlyContinue) }
+)
+
+$summary | Format-Table -AutoSize | Out-Host
+
+Write-Host "Done." -ForegroundColor Green
