@@ -16,7 +16,39 @@ function Require-Admin {
 
 function Require-Winget {
   if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    throw "winget not found. Install 'App Installer' from Microsoft Store or enable winget."
+    Write-Warning "winget not found. We'll try a bootstrap install of winget (App Installer), then re-check."
+
+    # Best-effort winget bootstrap for Windows Server / minimal images.
+    # Strategy:
+    # - Install Microsoft.VCLibs.140.00.UWPDesktop
+    # - Install Microsoft.UI.Xaml
+    # - Install Microsoft.DesktopAppInstaller (winget)
+    # Uses aka.ms links that redirect to the latest msixbundle/appx.
+
+    $tmp = Join-Path $env:TEMP ("winget-bootstrap-" + [guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+
+    $pkgs = @(
+      @{ name = 'VCLibs'; url = 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx' },
+      @{ name = 'UIXaml'; url = 'https://aka.ms/Microsoft.UI.Xaml.2.8.x64.appx' },
+      @{ name = 'DesktopAppInstaller'; url = 'https://aka.ms/getwinget' }
+    )
+
+    foreach ($p in $pkgs) {
+      $out = Join-Path $tmp ($p.name + (Split-Path $p.url -Leaf))
+      Write-Host ("Downloading {0} -> {1}" -f $p.name, $out) -ForegroundColor Cyan
+      Invoke-WebRequest -UseBasicParsing -Uri $p.url -OutFile $out
+      Write-Host ("Installing {0}" -f $p.name) -ForegroundColor Cyan
+      Add-AppxPackage -Path $out
+    }
+
+    Start-Sleep -Seconds 2
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+      throw "winget still not found after bootstrap. On Windows Server, ensure Microsoft Store/App Installer is available, or install prerequisites manually."
+    }
+
+    Write-Host "winget is now available." -ForegroundColor Green
   }
 }
 
