@@ -144,10 +144,23 @@ try {
   if ($nodeV -match '^v(\d+)\.' ) {
     $major = [int]$Matches[1]
     if ($major -ge 24) {
-      Write-Warning "Node $nodeV detected (non-LTS/current). Switching to nodejs-lts via Chocolatey."
+      Write-Warning "Node $nodeV detected (non-LTS/current). Attempting to switch to Node 22 LTS."
+
       if (Get-Command choco -ErrorAction SilentlyContinue) {
-        choco upgrade nodejs-lts -y --no-progress
-        Write-Warning "Open a NEW PowerShell after this step so PATH updates apply, then re-run this script."
+        # Some environments have nodejs-lts mapped to v24+. If so, use nvm-windows to pin v22.
+        Write-Host "Installing/using nvm-windows to pin Node 22 LTS..." -ForegroundColor Cyan
+        choco install nvm -y --no-progress | Out-Host
+
+        $target = '22.13.1'
+        try {
+          nvm install $target | Out-Host
+        } catch {
+          Write-Warning "nvm install $target failed: $($_.Exception.Message)"
+          throw
+        }
+        nvm use $target | Out-Host
+
+        Write-Warning "Open a NEW PowerShell so PATH updates apply (nvm shim). Then re-run this script."
         return
       }
     }
