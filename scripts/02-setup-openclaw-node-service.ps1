@@ -73,7 +73,7 @@ function Ensure-ExecApprovalsFiles {
       $json | Set-Content -Encoding utf8 -Path $file
       Write-Host "Wrote approvals: $file" -ForegroundColor Green
     } catch {
-      Write-Warning "Could not write approvals to $file: $($_.Exception.Message)"
+      Write-Warning "Could not write approvals to $($file): $($_.Exception.Message)"
     }
   }
 }
