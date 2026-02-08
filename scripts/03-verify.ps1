@@ -4,7 +4,11 @@ param(
 
   [string]$GatewayUrl = 'ws://145.14.157.230:18789',
 
-  [string]$NodeIdOrIp = ''
+  # Optional: node id or IP. If omitted, the script auto-selects a paired node-host device.
+  [string]$NodeIdOrIp = '',
+
+  # Used only for auto-selection when NodeIdOrIp is empty.
+  [string]$NodeDisplayName = 'IAMSERVER'
 )
 
 Set-StrictMode -Version Latest
@@ -81,16 +85,55 @@ if ($obj) {
   Invoke-OpenClaw @('nodes','list','--url',$GatewayUrl,'--token',$GatewayToken) | Out-Host
 }
 
-if ($NodeIdOrIp -ne '') {
+function Resolve-NodeId {
+  param([string]$NodeIdOrIp, [string]$NodeDisplayName)
+
+  if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '') {
+    # If they gave a 64-hex node id, use it.
+    if ($NodeIdOrIp -match '^[a-f0-9]{64}$') { return $NodeIdOrIp }
+  }
+
+  # Reliable JSON source: devices list.
+  $devJson = (& openclaw devices list --json 2>$null)
+  if ($LASTEXITCODE -ne 0) { return $null }
+  $dev = Try-ParseJson $devJson
+  if (-not $dev) { return $null }
+
+  $paired = @($dev.paired | Where-Object { $_.clientId -eq 'node-host' -and $_.clientMode -eq 'node' })
+  if ($paired.Count -eq 0) { return $null }
+
+  if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and ($NodeIdOrIp -match '^\d{1,3}(\.\d{1,3}){3}$')) {
+    $paired = @($paired | Where-Object { $_.remoteIp -eq $NodeIdOrIp })
+  } elseif ($NodeDisplayName -and $NodeDisplayName.Trim() -ne '') {
+    $paired = @($paired | Where-Object { $_.displayName -eq $NodeDisplayName })
+  }
+
+  if ($paired.Count -eq 0) { return $null }
+
+  # Pick newest approval/creation.
+  $best = $paired | Sort-Object -Property @{Expression={ $_.approvedAtMs };Descending=$true}, @{Expression={ $_.createdAtMs };Descending=$true} | Select-Object -First 1
+  return $best.deviceId
+}
+
+$resolvedNodeId = Resolve-NodeId -NodeIdOrIp $NodeIdOrIp -NodeDisplayName $NodeDisplayName
+if ($resolvedNodeId) {
   Section "Node describe"
-  $descJson = (& openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $NodeIdOrIp --json 2>$null)
+  Write-Host "Using nodeId: $resolvedNodeId" -ForegroundColor Gray
+  $descJson = (& openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $resolvedNodeId --json 2>$null)
   $obj = $null
   if ($LASTEXITCODE -eq 0) { $obj = Try-ParseJson $descJson }
   if ($obj) {
     $obj | Format-List | Out-Host
   } else {
-    Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$NodeIdOrIp) | Out-Host
+    Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$resolvedNodeId) | Out-Host
   }
+} elseif ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '') {
+  # As a last resort, try whatever they provided.
+  Section "Node describe"
+  Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$NodeIdOrIp) | Out-Host
+} else {
+  Section "Node describe"
+  Write-Warning "No node id provided and auto-detection failed. Try: openclaw devices list --json (look for clientId=node-host)"
 }
 
 # restore env
