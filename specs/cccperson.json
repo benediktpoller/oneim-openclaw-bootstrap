@@ -21,7 +21,10 @@
     {"kind": "Column", "name": "CCC_CostCenter", "length": 64, "type": "String", "sortOrder": 3, "schemaDataLen": 0},
     {"kind": "Column", "name": "CCC_ContractType", "length": 32, "type": "String", "sortOrder": 4, "schemaDataLen": 0},
     {"kind": "Column", "name": "CCC_ManagerEmail", "length": 255, "type": "String", "sortOrder": 5, "schemaDataLen": 0},
-    {"kind": "Column", "name": "CCC_Notes", "length": 1024, "type": "String", "sortOrder": 6, "schemaDataLen": 0}
+    {"kind": "Column", "name": "CCC_Notes", "length": 1024, "type": "String", "sortOrder": 6, "schemaDataLen": 0},
+
+    {"kind": "Column", "name": "CCC_PersonEmail", "length": 255, "type": "String", "sortOrder": 10, "schemaDataLen": 0},
+    {"kind": "Column", "name": "CCC_PersonDisplayName", "length": 128, "type": "String", "sortOrder": 11, "schemaDataLen": 0}
   ],
   "rights": {
     "readGroupUids": ["CCC-925C30BDB9A63C89EF4F28512BC91B49"],
