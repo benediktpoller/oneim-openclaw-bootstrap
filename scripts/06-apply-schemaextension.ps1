@@ -125,7 +125,10 @@ $argList = @(
 if ($VerboseMode) { $argList += '-v' }
 
 Write-Host "Running SchemaExtensionCmd:" -ForegroundColor Cyan
-Write-Host "  $SchemaExtensionCmd $($argList -join ' ')" -ForegroundColor Gray
+Write-Host "  $SchemaExtensionCmd" -ForegroundColor Gray
+Write-Host "  Definition=$definitionToUse" -ForegroundColor Gray
+Write-Host "  LogLevel=$LogLevel" -ForegroundColor Gray
+Write-Host "  (Conn/Auth redacted)" -ForegroundColor DarkGray
 
 & $SchemaExtensionCmd @argList
 exit $LASTEXITCODE
