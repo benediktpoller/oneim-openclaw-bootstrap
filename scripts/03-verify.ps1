@@ -24,12 +24,29 @@ function Invoke-OpenClaw {
   return $LASTEXITCODE
 }
 
+function Strip-Ansi($s) {
+  if ($null -eq $s) { return $null }
+  # Remove common ANSI escape sequences (ESC[...)
+  return ($s -replace "`e\[[0-9;?]*[A-Za-z]", "")
+}
+
 function Try-ParseJson($text) {
   if (-not $text) { return $null }
-  $t = $text.TrimStart()
+
+  # When capturing output, PowerShell may return string[]; normalize.
+  $s = if ($text -is [array]) { ($text -join "`n") } else { [string]$text }
+
+  $s = Strip-Ansi $s
+  $t = $s.TrimStart()
+
   if ($t.StartsWith('{') -or $t.StartsWith('[')) {
-    return ($text | ConvertFrom-Json)
+    try {
+      return ($t | ConvertFrom-Json)
+    } catch {
+      return $null
+    }
   }
+
   return $null
 }
 
