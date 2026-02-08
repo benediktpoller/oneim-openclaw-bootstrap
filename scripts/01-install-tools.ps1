@@ -169,7 +169,9 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 } else {
   if (-not (Get-Command openclaw -ErrorAction SilentlyContinue)) {
     Write-Host "\n--- Installing OpenClaw CLI (npm -g openclaw) ---" -ForegroundColor Cyan
-    npm i -g openclaw
+    # On some Windows/Server images the optional local-LLM deps (node-llama-cpp) may fail to build/clone.
+    # OpenClaw works fine without them for our use-case; omit optional deps.
+    npm i -g openclaw --omit=optional
   } else {
     Write-Host "openclaw already installed." -ForegroundColor Green
   }
