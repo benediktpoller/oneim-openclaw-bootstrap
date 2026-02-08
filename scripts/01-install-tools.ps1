@@ -205,17 +205,25 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     $needsInstall = $true
   } else {
     # Don't trust PATH-only checks; verify the CLI actually runs.
-    try {
-      $null = (& openclaw --version)
-    } catch {
-      Write-Warning "openclaw command exists but is broken. Will reinstall. Error: $($_.Exception.Message)"
+    # External command failures often do NOT throw; check $LASTEXITCODE.
+    $null = (& openclaw --version)
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "openclaw command exists but is broken (exit=$LASTEXITCODE). Will reinstall."
       $needsInstall = $true
     }
   }
 
   if ($needsInstall) {
-    Write-Host "\n--- Installing OpenClaw CLI (npm -g openclaw --omit=optional) ---" -ForegroundColor Cyan
+    Write-Host "\n--- (Re)Installing OpenClaw CLI (npm -g openclaw --omit=optional) ---" -ForegroundColor Cyan
+    npm rm -g openclaw 2>$null | Out-Null
+    try { Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\openclaw" -ErrorAction SilentlyContinue } catch {}
     npm i -g openclaw --omit=optional
+
+    # verify
+    $null = (& openclaw --version)
+    if ($LASTEXITCODE -ne 0) {
+      throw "openclaw install completed but CLI is still not runnable (exit=$LASTEXITCODE)."
+    }
   } else {
     Write-Host "openclaw already installed (and runnable)." -ForegroundColor Green
   }
