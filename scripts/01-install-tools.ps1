@@ -7,7 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Section($t) {
-  Write-Host "\n=== $t ===" -ForegroundColor Cyan
+  Write-Host "`n=== $t ===" -ForegroundColor Cyan
 }
 
 function Require-Admin {
@@ -24,7 +24,7 @@ function Install-Chocolatey {
     return
   }
 
-  Write-Host "\n--- Installing Chocolatey (fallback package manager) ---" -ForegroundColor Cyan
+  Write-Host "`n--- Installing Chocolatey (fallback package manager) ---" -ForegroundColor Cyan
   Set-ExecutionPolicy Bypass -Scope Process -Force
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
   Invoke-Expression ((New-Object Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -94,7 +94,7 @@ function Install-WingetPackage {
     [string]$Name = $Id
   )
 
-  Write-Host "\n--- Installing: $Name ($Id) ---" -ForegroundColor Cyan
+  Write-Host "`n--- Installing: $Name ($Id) ---" -ForegroundColor Cyan
   # Use silent/accept agreements. Some packages may still prompt.
   winget install --id $Id --silent --accept-package-agreements --accept-source-agreements
 }
@@ -128,7 +128,7 @@ function Install-Tool {
   }
 
   if ($hasChoco -and $ChocoId) {
-    Write-Host "\n--- Installing: $Tool (choco: $ChocoId) ---" -ForegroundColor Cyan
+    Write-Host "`n--- Installing: $Tool (choco: $ChocoId) ---" -ForegroundColor Cyan
     choco install $ChocoId -y --no-progress
     return
   }
@@ -192,7 +192,7 @@ if (-not $SkipSqlCmd) {
       }
     }
     if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue) -and $hasChoco) {
-      Write-Host "\n--- Installing: sqlcmd (choco: sqlcmd) ---" -ForegroundColor Cyan
+      Write-Host "`n--- Installing: sqlcmd (choco: sqlcmd) ---" -ForegroundColor Cyan
       # Package availability varies; if it fails, install SQL cmdline utilities manually.
       choco install sqlcmd -y --no-progress
     }
