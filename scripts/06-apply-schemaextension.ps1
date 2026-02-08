@@ -71,10 +71,13 @@ if ($mode -eq 'CreateTable') {
     }
 
     # Also remove already-existing columns from the definition to avoid duplicate ALTER TABLE ... ADD.
+    # And set Extension UID from DialogTable so DialogColumn generation works.
     $existingCols = @{}
+    $dialogTableUid = $null
     $cn = New-Object System.Data.SqlClient.SqlConnection($Conn)
     try {
       $cn.Open()
+
       $cmd = $cn.CreateCommand()
       $cmd.CommandText = "select c.name from sys.columns c join sys.tables t on t.object_id=c.object_id where t.name=@tn"
       $null = $cmd.Parameters.Add('@tn',[System.Data.SqlDbType]::NVarChar,128)
@@ -82,8 +85,19 @@ if ($mode -eq 'CreateTable') {
       $r = $cmd.ExecuteReader()
       while ($r.Read()) { $existingCols[$r.GetString(0)] = $true }
       $r.Close()
+
+      $cmd2 = $cn.CreateCommand()
+      $cmd2.CommandText = "select top 1 UID_DialogTable from DialogTable where TableName=@tn"
+      $null = $cmd2.Parameters.Add('@tn',[System.Data.SqlDbType]::NVarChar,128)
+      $cmd2.Parameters['@tn'].Value = $extName
+      $dialogTableUid = [string]$cmd2.ExecuteScalar()
+
     } finally {
       if ($cn.State -ne 'Closed') { $cn.Close() }
+    }
+
+    if ($dialogTableUid -and (-not $meta.Ext.UID -or [string]$meta.Ext.UID -eq '')) {
+      $meta.Ext.SetAttribute('UID', $dialogTableUid)
     }
 
     $colNodes = $meta.Xml.SelectNodes("/Extensions/Extension[@Name='$extName']/Columns/*[@Name]")
