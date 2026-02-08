@@ -148,10 +148,9 @@ function Resolve-NodeId {
 }
 
 Section "Gateway connectivity check"
-Write-Host "Listing nodes (explicit --url/--token)" -ForegroundColor Gray
-$exit = Invoke-OpenClaw @('nodes','list','--url',$GatewayUrl,'--token',$GatewayToken,'--json')
-
-if ($exit -ne 0) {
+Write-Host "Checking gateway connectivity (devices list)" -ForegroundColor Gray
+$devCheck = (& openclaw devices list --json 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not (Try-ParseJson $devCheck)) {
   Write-Host "" 
   Write-Warning "Gateway connection failed. If you see 'disconnected (1008): pairing required', you must approve this VM as a DEVICE on the gateway."
   Write-Host "On the gateway host run:" -ForegroundColor Yellow
@@ -160,13 +159,53 @@ if ($exit -ne 0) {
   Write-Host "" 
 }
 
+function Resolve-ConnectedNodeId {
+  param([string]$NodeIdOrIp, [string]$DisplayName)
+
+  $candidateIds = @()
+
+  if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and $NodeIdOrIp -match '^[a-f0-9]{64}$') {
+    $candidateIds = @($NodeIdOrIp)
+  } else {
+    $devJson = (& openclaw devices list --json 2>$null)
+    if ($LASTEXITCODE -eq 0) {
+      $dev = Try-ParseJson $devJson
+      if ($dev) {
+        $paired = @($dev.paired | Where-Object { $_.clientId -eq 'node-host' -and $_.clientMode -eq 'node' })
+
+        if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and ($NodeIdOrIp -match '^\d{1,3}(\.\d{1,3}){3}$')) {
+          $paired = @($paired | Where-Object { $_.remoteIp -eq $NodeIdOrIp })
+        } elseif ($DisplayName -and $DisplayName.Trim() -ne '') {
+          $paired = @($paired | Where-Object { $_.displayName -eq $DisplayName })
+        }
+
+        $candidateIds = @($paired | Sort-Object -Property @{Expression={ $_.approvedAtMs };Descending=$true}, @{Expression={ $_.createdAtMs };Descending=$true} | Select-Object -ExpandProperty deviceId)
+      }
+    }
+  }
+
+  if ($candidateIds.Count -eq 0) { return $null }
+
+  # Prefer a CONNECTED node by probing nodes.describe.
+  foreach ($id in $candidateIds) {
+    $j = (& openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $id --json 2>$null)
+    if ($LASTEXITCODE -eq 0) {
+      $d = Try-ParseJson $j
+      if ($d -and $d.connected -eq $true) { return $id }
+    }
+  }
+
+  # Fallback: newest candidate.
+  return $candidateIds[0]
+}
+
 # Persist the resolved node id so later scripts don't need manual input.
 Section "Resolve + persist node id"
-$resolvedNodeId = Resolve-NodeId -NodeIdOrIp $NodeIdOrIp -DisplayName $DisplayName
+$resolvedNodeId = Resolve-ConnectedNodeId -NodeIdOrIp $NodeIdOrIp -DisplayName $DisplayName
 if ($resolvedNodeId) {
-  $outFile = Join-Path $env:USERPROFILE '.openclaw\nodeid.txt'
+  $outFile = Join-Path (Join-Path $env:USERPROFILE '.openclaw') 'nodeid.txt'
   New-Item -ItemType Directory -Force -Path (Split-Path $outFile -Parent) | Out-Null
-  $resolvedNodeId | Set-Content -Encoding ascii -Path $outFile
+  $resolvedNodeId | Set-Content -Encoding ascii -NoNewline -Path $outFile
   Write-Host "Resolved nodeId: $resolvedNodeId" -ForegroundColor Green
   Write-Host "Wrote: $outFile" -ForegroundColor Green
 
