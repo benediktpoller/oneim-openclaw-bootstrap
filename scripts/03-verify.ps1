@@ -10,13 +10,30 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Write-Host "Node service:" -ForegroundColor Cyan
-& openclaw node status | Out-Host
+function Section($t) {
+  Write-Host "`n=== $t ===" -ForegroundColor Cyan
+}
 
-Write-Host "\nNodes list:" -ForegroundColor Cyan
-& openclaw nodes list --url $GatewayUrl --token $GatewayToken | Out-Host
+function Invoke-OpenClaw {
+  param([Parameter(Mandatory=$true)][string[]]$Args)
+
+  $prev = $env:NODE_NO_WARNINGS
+  $env:NODE_NO_WARNINGS = '1'
+  try {
+    & openclaw @Args
+    return $LASTEXITCODE
+  } finally {
+    $env:NODE_NO_WARNINGS = $prev
+  }
+}
+
+Section "Node service"
+Invoke-OpenClaw @('node','status') | Out-Host
+
+Section "Nodes list"
+Invoke-OpenClaw @('nodes','list','--url',$GatewayUrl,'--token',$GatewayToken) | Out-Host
 
 if ($NodeIdOrIp -ne '') {
-  Write-Host "`nDescribe $($NodeIdOrIp):" -ForegroundColor Cyan
-  & openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $NodeIdOrIp | Out-Host
+  Section "Node describe"
+  Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$NodeIdOrIp) | Out-Host
 }
