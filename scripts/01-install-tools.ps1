@@ -14,42 +14,74 @@ function Require-Admin {
   }
 }
 
-function Require-Winget {
-  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    Write-Warning "winget not found. We'll try a bootstrap install of winget (App Installer), then re-check."
-
-    # Best-effort winget bootstrap for Windows Server / minimal images.
-    # Strategy:
-    # - Install Microsoft.VCLibs.140.00.UWPDesktop
-    # - Install Microsoft.UI.Xaml
-    # - Install Microsoft.DesktopAppInstaller (winget)
-    # Uses aka.ms links that redirect to the latest msixbundle/appx.
-
-    $tmp = Join-Path $env:TEMP ("winget-bootstrap-" + [guid]::NewGuid().ToString('n'))
-    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-
-    $pkgs = @(
-      @{ name = 'VCLibs'; url = 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx' },
-      @{ name = 'UIXaml'; url = 'https://aka.ms/Microsoft.UI.Xaml.2.8.x64.appx' },
-      @{ name = 'DesktopAppInstaller'; url = 'https://aka.ms/getwinget' }
-    )
-
-    foreach ($p in $pkgs) {
-      $out = Join-Path $tmp ($p.name + (Split-Path $p.url -Leaf))
-      Write-Host ("Downloading {0} -> {1}" -f $p.name, $out) -ForegroundColor Cyan
-      Invoke-WebRequest -UseBasicParsing -Uri $p.url -OutFile $out
-      Write-Host ("Installing {0}" -f $p.name) -ForegroundColor Cyan
-      Add-AppxPackage -Path $out
-    }
-
-    Start-Sleep -Seconds 2
-
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-      throw "winget still not found after bootstrap. On Windows Server, ensure Microsoft Store/App Installer is available, or install prerequisites manually."
-    }
-
-    Write-Host "winget is now available." -ForegroundColor Green
+function Install-Chocolatey {
+  if (Get-Command choco -ErrorAction SilentlyContinue) {
+    Write-Host "Chocolatey already installed." -ForegroundColor Green
+    return
   }
+
+  Write-Host "\n--- Installing Chocolatey (fallback package manager) ---" -ForegroundColor Cyan
+  Set-ExecutionPolicy Bypass -Scope Process -Force
+  [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
+  Invoke-Expression ((New-Object Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+  if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+    throw "Chocolatey install failed (choco not found after install)."
+  }
+}
+
+function Require-Winget {
+  if (Get-Command winget -ErrorAction SilentlyContinue) { return }
+
+  Write-Warning "winget not found. We'll try a bootstrap install of winget (App Installer) via Add-AppxPackage."
+
+  # Some Windows Server images (and Server Core) do not support AppX at all.
+  $appxSupported = $true
+  try {
+    Import-Module Appx -ErrorAction Stop
+  } catch {
+    $appxSupported = $false
+  }
+
+  if (-not $appxSupported) {
+    Write-Warning "AppX not supported on this platform. Falling back to Chocolatey-based installs."
+    Install-Chocolatey
+    return
+  }
+
+  $tmp = Join-Path $env:TEMP ("winget-bootstrap-" + [guid]::NewGuid().ToString('n'))
+  New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+
+  $pkgs = @(
+    @{ name = 'VCLibs'; url = 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx' },
+    @{ name = 'UIXaml'; url = 'https://aka.ms/Microsoft.UI.Xaml.2.8.x64.appx' },
+    @{ name = 'DesktopAppInstaller'; url = 'https://aka.ms/getwinget' }
+  )
+
+  foreach ($p in $pkgs) {
+    $out = Join-Path $tmp ($p.name + '-' + (Split-Path $p.url -Leaf))
+    Write-Host ("Downloading {0} -> {1}" -f $p.name, $out) -ForegroundColor Cyan
+    Invoke-WebRequest -UseBasicParsing -Uri $p.url -OutFile $out
+    Write-Host ("Installing {0}" -f $p.name) -ForegroundColor Cyan
+    try {
+      Add-AppxPackage -Path $out
+    } catch {
+      Write-Warning "Add-AppxPackage failed ($($p.name)): $($_.Exception.Message)"
+      Write-Warning "Falling back to Chocolatey-based installs."
+      Install-Chocolatey
+      return
+    }
+  }
+
+  Start-Sleep -Seconds 2
+
+  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Warning "winget still not found after AppX bootstrap. Falling back to Chocolatey-based installs."
+    Install-Chocolatey
+    return
+  }
+
+  Write-Host "winget is now available." -ForegroundColor Green
 }
 
 function Install-WingetPackage {
@@ -66,38 +98,64 @@ function Install-WingetPackage {
 Require-Admin
 Require-Winget
 
-# Git
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-  Install-WingetPackage -Id 'Git.Git' -Name 'Git'
-} else {
-  Write-Host "Git already installed." -ForegroundColor Green
+$hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+$hasChoco  = [bool](Get-Command choco -ErrorAction SilentlyContinue)
+
+if (-not $hasWinget -and -not $hasChoco) {
+  throw "Neither winget nor chocolatey is available. Cannot continue."
 }
 
-# Node.js (LTS)
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  Install-WingetPackage -Id 'OpenJS.NodeJS.LTS' -Name 'Node.js LTS'
-} else {
-  Write-Host "Node already installed." -ForegroundColor Green
+function Install-Tool {
+  param(
+    [Parameter(Mandatory=$true)][string]$Tool,
+    [string]$WingetId = '',
+    [string]$ChocoId = ''
+  )
+
+  if (Get-Command $Tool -ErrorAction SilentlyContinue) {
+    Write-Host "$Tool already installed." -ForegroundColor Green
+    return
+  }
+
+  if ($hasWinget -and $WingetId) {
+    Install-WingetPackage -Id $WingetId -Name $Tool
+    return
+  }
+
+  if ($hasChoco -and $ChocoId) {
+    Write-Host "\n--- Installing: $Tool (choco: $ChocoId) ---" -ForegroundColor Cyan
+    choco install $ChocoId -y --no-progress
+    return
+  }
+
+  throw "No installer mapping provided for $Tool (wingetId='$WingetId', chocoId='$ChocoId')."
 }
+
+# Git
+Install-Tool -Tool 'git' -WingetId 'Git.Git' -ChocoId 'git'
+
+# Node.js (LTS)
+Install-Tool -Tool 'node' -WingetId 'OpenJS.NodeJS.LTS' -ChocoId 'nodejs-lts'
 
 # PowerShell 7 (optional)
 if (-not $SkipPowerShell7) {
-  if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
-    Install-WingetPackage -Id 'Microsoft.PowerShell' -Name 'PowerShell 7'
-  } else {
-    Write-Host "pwsh already installed." -ForegroundColor Green
-  }
+  Install-Tool -Tool 'pwsh' -WingetId 'Microsoft.PowerShell' -ChocoId 'powershell-core'
 }
 
 # sqlcmd (optional)
 if (-not $SkipSqlCmd) {
   if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue)) {
-    # New sqlcmd (mssql-tools18) is usually available via winget.
-    # If this id fails in your environment, install SQL Server Command Line Utilities manually.
-    try {
-      Install-WingetPackage -Id 'Microsoft.SQLCMD' -Name 'SQLCMD'
-    } catch {
-      Write-Warning "winget id 'Microsoft.SQLCMD' failed. You may need to install SQL Server Command Line Utilities / mssql-tools manually. Error: $($_.Exception.Message)"
+    if ($hasWinget) {
+      try {
+        Install-WingetPackage -Id 'Microsoft.SQLCMD' -Name 'SQLCMD'
+      } catch {
+        Write-Warning "winget id 'Microsoft.SQLCMD' failed. We'll try Chocolatey 'sqlcmd'."
+      }
+    }
+    if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue) -and $hasChoco) {
+      Write-Host "\n--- Installing: sqlcmd (choco: sqlcmd) ---" -ForegroundColor Cyan
+      # Package availability varies; if it fails, install SQL cmdline utilities manually.
+      choco install sqlcmd -y --no-progress
     }
   } else {
     Write-Host "sqlcmd already installed." -ForegroundColor Green
