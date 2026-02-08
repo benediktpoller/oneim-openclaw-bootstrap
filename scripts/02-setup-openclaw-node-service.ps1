@@ -62,7 +62,7 @@ $hp = Parse-HostPort $GatewayUrl
 $gwHost = $hp[0]
 $gwPort = $hp[1]
 
-Write-Host "\nInstalling node service -> $gwHost:$gwPort (displayName=$DisplayName)" -ForegroundColor Cyan
+Write-Host "`nInstalling node service -> $($gwHost):$($gwPort) (displayName=$DisplayName)" -ForegroundColor Cyan
 & openclaw node install --host $gwHost --port $gwPort --display-name $DisplayName --force | Out-Host
 
 Write-Host "\nRestarting node service" -ForegroundColor Cyan
