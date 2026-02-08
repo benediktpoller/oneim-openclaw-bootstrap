@@ -104,6 +104,49 @@ Invoke-OpenClaw @('node','restart') | Out-Host
 Section "Node service status"
 Invoke-OpenClaw @('node','status') | Out-Host
 
+function Strip-Ansi($s) {
+  if ($null -eq $s) { return $null }
+  return ($s -replace "`e\[[0-9;?]*[A-Za-z]", "")
+}
+
+function Try-ParseJson($text) {
+  if (-not $text) { return $null }
+  $s = if ($text -is [array]) { ($text -join "`n") } else { [string]$text }
+  $s = Strip-Ansi $s
+  $t = $s.TrimStart()
+  if ($t.StartsWith('{') -or $t.StartsWith('[')) {
+    try { return ($t | ConvertFrom-Json) } catch { return $null }
+  }
+  return $null
+}
+
+function Resolve-NodeId {
+  param([string]$NodeIdOrIp, [string]$DisplayName)
+
+  if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and $NodeIdOrIp -match '^[a-f0-9]{64}$') {
+    return $NodeIdOrIp
+  }
+
+  $devJson = (& openclaw devices list --json 2>$null)
+  if ($LASTEXITCODE -ne 0) { return $null }
+  $dev = Try-ParseJson $devJson
+  if (-not $dev) { return $null }
+
+  $paired = @($dev.paired | Where-Object { $_.clientId -eq 'node-host' -and $_.clientMode -eq 'node' })
+  if ($paired.Count -eq 0) { return $null }
+
+  if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and ($NodeIdOrIp -match '^\d{1,3}(\.\d{1,3}){3}$')) {
+    $paired = @($paired | Where-Object { $_.remoteIp -eq $NodeIdOrIp })
+  } elseif ($DisplayName -and $DisplayName.Trim() -ne '') {
+    $paired = @($paired | Where-Object { $_.displayName -eq $DisplayName })
+  }
+
+  if ($paired.Count -eq 0) { return $null }
+
+  $best = $paired | Sort-Object -Property @{Expression={ $_.approvedAtMs };Descending=$true}, @{Expression={ $_.createdAtMs };Descending=$true} | Select-Object -First 1
+  return $best.deviceId
+}
+
 Section "Gateway connectivity check"
 Write-Host "Listing nodes (explicit --url/--token)" -ForegroundColor Gray
 $exit = Invoke-OpenClaw @('nodes','list','--url',$GatewayUrl,'--token',$GatewayToken,'--json')
@@ -117,9 +160,20 @@ if ($exit -ne 0) {
   Write-Host "" 
 }
 
-if ($NodeIdOrIp -ne '') {
-  Write-Host ("Describe node: {0}" -f $NodeIdOrIp) -ForegroundColor Gray
-  Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$NodeIdOrIp,'--json') | Out-Host
+# Persist the resolved node id so later scripts don't need manual input.
+Section "Resolve + persist node id"
+$resolvedNodeId = Resolve-NodeId -NodeIdOrIp $NodeIdOrIp -DisplayName $DisplayName
+if ($resolvedNodeId) {
+  $outFile = Join-Path $env:USERPROFILE '.openclaw\nodeid.txt'
+  New-Item -ItemType Directory -Force -Path (Split-Path $outFile -Parent) | Out-Null
+  $resolvedNodeId | Set-Content -Encoding ascii -Path $outFile
+  Write-Host "Resolved nodeId: $resolvedNodeId" -ForegroundColor Green
+  Write-Host "Wrote: $outFile" -ForegroundColor Green
+
+  Write-Host ("Describe node: {0}" -f $resolvedNodeId) -ForegroundColor Gray
+  Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$resolvedNodeId,'--json') | Out-Host
+} else {
+  Write-Warning "Could not resolve nodeId automatically. You can pass -NodeIdOrIp <nodeId|ip> or run: openclaw devices list --json"
 }
 
 Section "If this is a fresh VM (node pairing)"

@@ -63,6 +63,7 @@ openclaw nodes approve <requestId>
   - Writes exec approvals (defaults security=full)
   - Sets `gateway.mode=remote`, `gateway.remote.url/token`
   - Installs node host service (`openclaw node install ...`) and restarts it
+  - Auto-resolves the active node id (via `openclaw devices list --json`) and writes it to: `~\.openclaw\nodeid.txt`
 
 - `scripts/03-verify.ps1`
   - Prints node service status
