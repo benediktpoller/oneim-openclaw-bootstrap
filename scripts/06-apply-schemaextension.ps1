@@ -62,10 +62,12 @@ if ($mode -eq 'CreateTable') {
     Write-Host "Info: $extName already exists. Applying without <CreateTable/> step." -ForegroundColor Yellow
     $tmp = Join-Path $env:TEMP ("SchemaExt_{0}_{1}.xml" -f $extName, [System.Guid]::NewGuid().ToString('N'))
 
-    # Remove <CreateTable/> steps only.
-    $steps = $meta.Ext.Steps
-    if ($steps -and $steps.CreateTable) {
-      $null = $steps.RemoveChild($steps.CreateTable)
+    # Remove <CreateTable/> steps only (robustly; PowerShell XML can expose elements oddly).
+    $nodes = $meta.Xml.SelectNodes("/Extensions/Extension[@Name='$extName']/Steps/CreateTable")
+    if ($nodes) {
+      foreach ($n in @($nodes)) {
+        $null = $n.ParentNode.RemoveChild($n)
+      }
     }
 
     $meta.Xml.Save($tmp)
