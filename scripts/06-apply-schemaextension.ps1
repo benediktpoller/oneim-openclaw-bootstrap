@@ -70,6 +70,30 @@ if ($mode -eq 'CreateTable') {
       }
     }
 
+    # Also remove already-existing columns from the definition to avoid duplicate ALTER TABLE ... ADD.
+    $existingCols = @{}
+    $cn = New-Object System.Data.SqlClient.SqlConnection($Conn)
+    try {
+      $cn.Open()
+      $cmd = $cn.CreateCommand()
+      $cmd.CommandText = "select c.name from sys.columns c join sys.tables t on t.object_id=c.object_id where t.name=@tn"
+      $null = $cmd.Parameters.Add('@tn',[System.Data.SqlDbType]::NVarChar,128)
+      $cmd.Parameters['@tn'].Value = $extName
+      $r = $cmd.ExecuteReader()
+      while ($r.Read()) { $existingCols[$r.GetString(0)] = $true }
+      $r.Close()
+    } finally {
+      if ($cn.State -ne 'Closed') { $cn.Close() }
+    }
+
+    $colNodes = $meta.Xml.SelectNodes("/Extensions/Extension[@Name='$extName']/Columns/*[@Name]")
+    foreach ($c in @($colNodes)) {
+      $n = $c.Attributes['Name'].Value
+      if ($existingCols.ContainsKey($n)) {
+        $null = $c.ParentNode.RemoveChild($c)
+      }
+    }
+
     $meta.Xml.Save($tmp)
     $definitionToUse = $tmp
   }
