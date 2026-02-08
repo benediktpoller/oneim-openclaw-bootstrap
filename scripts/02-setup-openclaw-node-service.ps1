@@ -179,15 +179,15 @@ function Resolve-ConnectedNodeId {
       $dev = Try-ParseJson $devJson
       if ($dev) {
         # In some repair flows, the connected node may show up under a CLI device id.
-        # So consider all paired devices from this host and then probe nodes.describe.
+        # So consider all paired win32 devices first, then use nodes.describe to filter.
         $paired = @($dev.paired | Where-Object { $_.platform -eq 'win32' })
 
         if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and ($NodeIdOrIp -match '^\d{1,3}(\.\d{1,3}){3}$')) {
           $paired = @($paired | Where-Object { (Get-PropValue $_ 'remoteIp') -eq $NodeIdOrIp })
         }
-        if ($DisplayName -and $DisplayName.Trim() -ne '') {
-          $paired = @($paired | Where-Object { (Get-PropValue $_ 'displayName') -eq $DisplayName })
-        }
+
+        # IMPORTANT: do NOT filter by displayName here; some device entries (e.g. CLI) may not have it.
+        # We'll validate displayName using nodes.describe instead.
 
         $candidateIds = @($paired |
           Sort-Object -Property @{Expression={ $_.approvedAtMs };Descending=$true}, @{Expression={ $_.createdAtMs };Descending=$true} |
@@ -203,8 +203,14 @@ function Resolve-ConnectedNodeId {
     $j = (& openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $id --json 2>$null)
     if ($LASTEXITCODE -eq 0) {
       $d = Try-ParseJson $j
-      if ($d -and $d.connected -eq $true) {
-        # If commands are present, ensure system.run exists.
+      if (-not $d) { continue }
+
+      # Filter by display name using describe data (more reliable than devices list fields).
+      if ($DisplayName -and $DisplayName.Trim() -ne '') {
+        if ($d.displayName -ne $DisplayName) { continue }
+      }
+
+      if ($d.connected -eq $true) {
         if (-not $d.commands -or ($d.commands -contains 'system.run')) {
           return $id
         }
