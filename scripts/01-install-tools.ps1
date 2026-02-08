@@ -217,11 +217,29 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     Write-Host "\n--- (Re)Installing OpenClaw CLI (npm -g openclaw --omit=optional) ---" -ForegroundColor Cyan
     npm rm -g openclaw 2>$null | Out-Null
     try { Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\openclaw" -ErrorAction SilentlyContinue } catch {}
+    $installed = $false
+
+    Write-Host "Installing via npm (normal, without optional deps)..." -ForegroundColor Gray
     npm i -g openclaw --omit=optional
+    if ($LASTEXITCODE -eq 0) { $installed = $true }
+
+    if (-not $installed) {
+      Write-Warning "npm install failed (exit=$LASTEXITCODE). On Windows Server this is often caused by node-llama-cpp postinstall. Retrying with --ignore-scripts (skips postinstall)."
+      npm i -g openclaw --ignore-scripts
+      if ($LASTEXITCODE -eq 0) { $installed = $true }
+    }
+
+    if (-not $installed) {
+      throw "openclaw npm install failed (exit=$LASTEXITCODE)."
+    }
 
     # verify
     $null = (& openclaw --version)
     if ($LASTEXITCODE -ne 0) {
+      Write-Warning "openclaw still not runnable. Showing diagnostics..."
+      try { where.exe openclaw | Out-Host } catch {}
+      try { npm prefix -g | Out-Host } catch {}
+      try { npm root -g | Out-Host } catch {}
       throw "openclaw install completed but CLI is still not runnable (exit=$LASTEXITCODE)."
     }
   } else {
