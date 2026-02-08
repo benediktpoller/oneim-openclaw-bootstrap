@@ -96,8 +96,11 @@ if ($mode -eq 'CreateTable') {
       if ($cn.State -ne 'Closed') { $cn.Close() }
     }
 
-    if ($dialogTableUid -and (-not $meta.Ext.UID -or [string]$meta.Ext.UID -eq '')) {
-      $meta.Ext.SetAttribute('UID', $dialogTableUid)
+    if ($dialogTableUid) {
+      $curUid = $meta.Ext.GetAttribute('UID')
+      if (-not $curUid -or $curUid -eq '') {
+        $meta.Ext.SetAttribute('UID', $dialogTableUid)
+      }
     }
 
     $colNodes = $meta.Xml.SelectNodes("/Extensions/Extension[@Name='$extName']/Columns/*[@Name]")
