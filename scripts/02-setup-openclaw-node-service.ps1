@@ -44,12 +44,8 @@ function Parse-HostPort([string]$Url) {
   return @($hostName, $port)
 }
 
-function Ensure-ExecApprovalsFileForCurrentUser {
-  $dir = Join-Path $env:USERPROFILE '.openclaw'
-  $file = Join-Path $dir 'exec-approvals.json'
-  New-Item -ItemType Directory -Force -Path $dir | Out-Null
-
-  @'
+function Ensure-ExecApprovalsFiles {
+  $json = @'
 {
   "version": 1,
   "defaults": {
@@ -60,15 +56,32 @@ function Ensure-ExecApprovalsFileForCurrentUser {
   },
   "agents": {}
 }
-'@ | Set-Content -Encoding utf8 -Path $file
+'@
 
-  Write-Host "Wrote approvals: $file" -ForegroundColor Green
+  $targets = @(
+    "$env:USERPROFILE\.openclaw\exec-approvals.json",
+    # Some installs run the scheduled task as the built-in Administrator account
+    "C:\Users\Administrator\.openclaw\exec-approvals.json",
+    # Worst-case: LocalSystem
+    "C:\Windows\System32\config\systemprofile\.openclaw\exec-approvals.json"
+  )
+
+  foreach ($file in $targets) {
+    try {
+      $dir = Split-Path $file -Parent
+      New-Item -ItemType Directory -Force -Path $dir | Out-Null
+      $json | Set-Content -Encoding utf8 -Path $file
+      Write-Host "Wrote approvals: $file" -ForegroundColor Green
+    } catch {
+      Write-Warning "Could not write approvals to $file: $($_.Exception.Message)"
+    }
+  }
 }
 
 Require-Command openclaw
 
 Section "Exec approvals"
-Ensure-ExecApprovalsFileForCurrentUser
+Ensure-ExecApprovalsFiles
 
 Section "Configure remote gateway defaults (local CLI)"
 Invoke-OpenClaw @('config','set','gateway.mode','remote') | Out-Host

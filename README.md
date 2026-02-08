@@ -67,3 +67,8 @@ openclaw nodes approve <requestId>
 - `scripts/03-verify.ps1`
   - Prints node service status
   - Prints `openclaw nodes list/describe` using explicit `--url/--token`
+
+- `scripts/04-debug-node.ps1`
+  - Diagnostics when the scheduled task exits immediately or `system.run` stays approval-gated
+  - Shows service user/profile, approvals file locations, task events
+  - Can run `~\.openclaw\node.cmd` in foreground to capture the real error
