@@ -137,6 +137,25 @@ Install-Tool -Tool 'git' -WingetId 'Git.Git' -ChocoId 'git'
 # Node.js (LTS)
 Install-Tool -Tool 'node' -WingetId 'OpenJS.NodeJS.LTS' -ChocoId 'nodejs-lts'
 
+# Ensure we are on Node LTS (OpenClaw is tested primarily on LTS)
+try {
+  $nodeV = (& node -v).Trim()
+  Write-Host "Node version: $nodeV" -ForegroundColor Gray
+  if ($nodeV -match '^v(\d+)\.' ) {
+    $major = [int]$Matches[1]
+    if ($major -ge 24) {
+      Write-Warning "Node $nodeV detected (non-LTS/current). Switching to nodejs-lts via Chocolatey."
+      if (Get-Command choco -ErrorAction SilentlyContinue) {
+        choco upgrade nodejs-lts -y --no-progress
+        Write-Warning "Open a NEW PowerShell after this step so PATH updates apply, then re-run this script."
+        return
+      }
+    }
+  }
+} catch {
+  Write-Warning "Could not read node version: $($_.Exception.Message)"
+}
+
 # PowerShell 7 (optional)
 if (-not $SkipPowerShell7) {
   Install-Tool -Tool 'pwsh' -WingetId 'Microsoft.PowerShell' -ChocoId 'powershell-core'
@@ -167,13 +186,25 @@ if (-not $SkipSqlCmd) {
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   Write-Warning "npm not found yet. If you just installed Node, open a new PowerShell and re-run this script."
 } else {
+  $needsInstall = $false
+
   if (-not (Get-Command openclaw -ErrorAction SilentlyContinue)) {
-    Write-Host "\n--- Installing OpenClaw CLI (npm -g openclaw) ---" -ForegroundColor Cyan
-    # On some Windows/Server images the optional local-LLM deps (node-llama-cpp) may fail to build/clone.
-    # OpenClaw works fine without them for our use-case; omit optional deps.
+    $needsInstall = $true
+  } else {
+    # Don't trust PATH-only checks; verify the CLI actually runs.
+    try {
+      $null = (& openclaw --version)
+    } catch {
+      Write-Warning "openclaw command exists but is broken. Will reinstall. Error: $($_.Exception.Message)"
+      $needsInstall = $true
+    }
+  }
+
+  if ($needsInstall) {
+    Write-Host "\n--- Installing OpenClaw CLI (npm -g openclaw --omit=optional) ---" -ForegroundColor Cyan
     npm i -g openclaw --omit=optional
   } else {
-    Write-Host "openclaw already installed." -ForegroundColor Green
+    Write-Host "openclaw already installed (and runnable)." -ForegroundColor Green
   }
 }
 
