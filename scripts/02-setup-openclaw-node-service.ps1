@@ -171,27 +171,37 @@ function Resolve-ConnectedNodeId {
     if ($LASTEXITCODE -eq 0) {
       $dev = Try-ParseJson $devJson
       if ($dev) {
-        $paired = @($dev.paired | Where-Object { $_.clientId -eq 'node-host' -and $_.clientMode -eq 'node' })
+        # In some repair flows, the connected node may show up under a CLI device id.
+        # So consider all paired devices from this host and then probe nodes.describe.
+        $paired = @($dev.paired | Where-Object { $_.platform -eq 'win32' })
 
         if ($NodeIdOrIp -and $NodeIdOrIp.Trim() -ne '' -and ($NodeIdOrIp -match '^\d{1,3}(\.\d{1,3}){3}$')) {
           $paired = @($paired | Where-Object { $_.remoteIp -eq $NodeIdOrIp })
-        } elseif ($DisplayName -and $DisplayName.Trim() -ne '') {
+        }
+        if ($DisplayName -and $DisplayName.Trim() -ne '') {
           $paired = @($paired | Where-Object { $_.displayName -eq $DisplayName })
         }
 
-        $candidateIds = @($paired | Sort-Object -Property @{Expression={ $_.approvedAtMs };Descending=$true}, @{Expression={ $_.createdAtMs };Descending=$true} | Select-Object -ExpandProperty deviceId)
+        $candidateIds = @($paired |
+          Sort-Object -Property @{Expression={ $_.approvedAtMs };Descending=$true}, @{Expression={ $_.createdAtMs };Descending=$true} |
+          Select-Object -ExpandProperty deviceId -Unique)
       }
     }
   }
 
   if ($candidateIds.Count -eq 0) { return $null }
 
-  # Prefer a CONNECTED node by probing nodes.describe.
+  # Prefer a CONNECTED node that supports system.run by probing nodes.describe.
   foreach ($id in $candidateIds) {
     $j = (& openclaw nodes describe --url $GatewayUrl --token $GatewayToken --node $id --json 2>$null)
     if ($LASTEXITCODE -eq 0) {
       $d = Try-ParseJson $j
-      if ($d -and $d.connected -eq $true) { return $id }
+      if ($d -and $d.connected -eq $true) {
+        # If commands are present, ensure system.run exists.
+        if (-not $d.commands -or ($d.commands -contains 'system.run')) {
+          return $id
+        }
+      }
     }
   }
 
