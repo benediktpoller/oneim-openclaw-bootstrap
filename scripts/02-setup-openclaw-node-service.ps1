@@ -93,7 +93,7 @@ Invoke-OpenClaw @('node','status') | Out-Host
 
 Section "Gateway connectivity check"
 Write-Host "Listing nodes (explicit --url/--token)" -ForegroundColor Gray
-$exit = Invoke-OpenClaw @('nodes','list','--url',$GatewayUrl,'--token',$GatewayToken)
+$exit = Invoke-OpenClaw @('nodes','list','--url',$GatewayUrl,'--token',$GatewayToken,'--json')
 
 if ($exit -ne 0) {
   Write-Host "" 
@@ -106,7 +106,7 @@ if ($exit -ne 0) {
 
 if ($NodeIdOrIp -ne '') {
   Write-Host ("Describe node: {0}" -f $NodeIdOrIp) -ForegroundColor Gray
-  Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$NodeIdOrIp) | Out-Host
+  Invoke-OpenClaw @('nodes','describe','--url',$GatewayUrl,'--token',$GatewayToken,'--node',$NodeIdOrIp,'--json') | Out-Host
 }
 
 Section "If this is a fresh VM (node pairing)"
