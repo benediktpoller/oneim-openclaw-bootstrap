@@ -73,3 +73,9 @@ openclaw nodes approve <requestId>
   - Diagnostics when the scheduled task exits immediately or `system.run` stays approval-gated
   - Shows service user/profile, approvals file locations, task events
   - Can run `~\.openclaw\node.cmd` in foreground to capture the real error
+
+- `scripts/05-generate-schemaextension.ps1`
+  - Generates a SchemaExtension control XML from a JSON spec (see `specs/*.json`)
+
+- `scripts/06-apply-schemaextension.ps1`
+  - Runs `SchemaExtensionCmd.exe` with `/Conn`, `/Auth`, `/Definition`

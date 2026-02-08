@@ -1,0 +1,27 @@
+{
+  "name": "CCCContract",
+  "customerPrefix": "CCC",
+  "mode": "CreateTable",
+  "display": "Contracts",
+  "description": "Beschreibung",
+  "columns": [
+    {"kind": "Column", "name": "CCC_ContractNumber", "length": 64, "type": "String", "sortOrder": 1, "schemaDataLen": 0},
+    {
+      "kind": "FkColumn",
+      "name": "CCC_UID_Person",
+      "length": 38,
+      "type": "String",
+      "isUid": true,
+      "sortOrder": 1,
+      "schemaDataLen": 0,
+      "restrictionChild": "InsertRestrict",
+      "restrictionParent": "DeleteSetNull",
+      "otherPk": {"table": "Person", "column": "UID_Person"}
+    }
+  ],
+  "rights": {
+    "readGroupUids": ["CCC-925C30BDB9A63C89EF4F28512BC91B49"],
+    "writeGroupUids": ["CCC-EC7AC7AB947DA4956ABBD46787C75C02"]
+  },
+  "steps": ["CreateTable", "CreateColumns", "SetRights", "DialogTag:None"]
+}

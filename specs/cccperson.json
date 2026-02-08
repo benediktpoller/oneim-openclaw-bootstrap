@@ -1,0 +1,31 @@
+{
+  "name": "CCCPerson",
+  "customerPrefix": "CCC",
+  "mode": "CreateTable",
+  "display": "Custom Person Attributes",
+  "description": "Custom attributes per Person",
+  "columns": [
+    {
+      "kind": "FkColumn",
+      "name": "CCC_UID_Person",
+      "length": 38,
+      "type": "String",
+      "isUid": true,
+      "sortOrder": 1,
+      "schemaDataLen": 0,
+      "restrictionChild": "InsertRestrict",
+      "restrictionParent": "DeleteRestrict",
+      "otherPk": {"table": "Person", "column": "UID_Person"}
+    },
+    {"kind": "Column", "name": "CCC_EmployeeNumber", "length": 32, "type": "String", "sortOrder": 2, "schemaDataLen": 0},
+    {"kind": "Column", "name": "CCC_CostCenter", "length": 64, "type": "String", "sortOrder": 3, "schemaDataLen": 0},
+    {"kind": "Column", "name": "CCC_ContractType", "length": 32, "type": "String", "sortOrder": 4, "schemaDataLen": 0},
+    {"kind": "Column", "name": "CCC_ManagerEmail", "length": 255, "type": "String", "sortOrder": 5, "schemaDataLen": 0},
+    {"kind": "Column", "name": "CCC_Notes", "length": 1024, "type": "String", "sortOrder": 6, "schemaDataLen": 0}
+  ],
+  "rights": {
+    "readGroupUids": ["CCC-925C30BDB9A63C89EF4F28512BC91B49"],
+    "writeGroupUids": ["CCC-EC7AC7AB947DA4956ABBD46787C75C02"]
+  },
+  "steps": ["CreateTable", "CreateColumns", "SetRights", "DialogTag:None"]
+}
