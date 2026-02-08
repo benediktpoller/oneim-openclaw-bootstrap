@@ -5,6 +5,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Suppress noisy Node deprecation warnings from the openclaw wrapper.
+$__prevNodeNoWarnings = $env:NODE_NO_WARNINGS
+$env:NODE_NO_WARNINGS = '1'
+
+trap {
+  $env:NODE_NO_WARNINGS = $__prevNodeNoWarnings
+  break
+}
+
 function Section($t) { Write-Host "`n=== $t ===" -ForegroundColor Cyan }
 
 Section "Identity / profile"
@@ -42,10 +51,14 @@ try {
 
 Section "Try running node.cmd in foreground (will block if successful)"
 Write-Host "If this exits immediately, copy/paste the error output back into chat." -ForegroundColor Yellow
-Write-Host "Path: $env:USERPROFILE\.openclaw\node.cmd" -ForegroundColor Gray
+$nodeCmd = Join-Path $env:USERPROFILE '.openclaw\node.cmd'
+Write-Host "Path: $nodeCmd" -ForegroundColor Gray
 
-if (Test-Path "$env:USERPROFILE\.openclaw\node.cmd") {
-  & "$env:USERPROFILE\.openclaw\node.cmd"
+if (Test-Path $nodeCmd) {
+  & $nodeCmd
 } else {
   Write-Warning "node.cmd not found in current USERPROFILE."
 }
+
+# restore env
+$env:NODE_NO_WARNINGS = $__prevNodeNoWarnings
