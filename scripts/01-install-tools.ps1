@@ -177,8 +177,19 @@ try {
 }
 
 # PowerShell 7 (optional)
+# NOTE: IdentityManager.PoSh for One Identity Manager 10.0x requires PowerShell 7.6+.
+# Stable PowerShell may lag behind; PowerShell Preview is often required.
 if (-not $SkipPowerShell7) {
   Install-Tool -Tool 'pwsh' -WingetId 'Microsoft.PowerShell' -ChocoId 'powershell-core'
+
+  # Try to install PowerShell Preview as well (best-effort).
+  # winget id: Microsoft.PowerShell.Preview
+  # choco id: powershell-preview
+  try {
+    Install-Tool -Tool 'pwsh-preview' -WingetId 'Microsoft.PowerShell.Preview' -ChocoId 'powershell-preview'
+  } catch {
+    Write-Warning "Could not install PowerShell Preview (optional): $($_.Exception.Message)"
+  }
 }
 
 # sqlcmd (optional)
@@ -273,7 +284,8 @@ $summary = @(
   [pscustomobject]@{ Name = 'git';     Version = ((git --version 2>$null) -join ' ');  Ok = [bool](Get-Command git -ErrorAction SilentlyContinue) },
   [pscustomobject]@{ Name = 'node';    Version = ((node -v 2>$null) -join ' ');        Ok = [bool](Get-Command node -ErrorAction SilentlyContinue) },
   [pscustomobject]@{ Name = 'npm';     Version = ((npm -v 2>$null) -join ' ');         Ok = [bool](Get-Command npm -ErrorAction SilentlyContinue) },
-  [pscustomobject]@{ Name = 'pwsh';    Version = ((pwsh -v 2>$null) -join ' ');        Ok = [bool](Get-Command pwsh -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'pwsh';          Version = ((pwsh -v 2>$null) -join ' ');        Ok = [bool](Get-Command pwsh -ErrorAction SilentlyContinue) },
+  [pscustomobject]@{ Name = 'pwsh-preview';  Version = ((& 'C:\Program Files\PowerShell\7-preview\pwsh.exe' -v 2>$null) -join ' '); Ok = Test-Path 'C:\Program Files\PowerShell\7-preview\pwsh.exe' },
   [pscustomobject]@{ Name = 'sqlcmd';  Version = ((sqlcmd -? 2>$null | Select-Object -First 1) -join ''); Ok = [bool](Get-Command sqlcmd -ErrorAction SilentlyContinue) },
   [pscustomobject]@{ Name = 'openclaw';Version = ((openclaw --version 2>$null) -join ' '); Ok = [bool](Get-Command openclaw -ErrorAction SilentlyContinue) }
 )
